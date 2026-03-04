@@ -3,3 +3,11 @@
 __pycache__/
 *.pyc
 .DS_Store
+# Generated data files — too large for GitHub
+data/cleaned_food_data_v4.csv
+data/tfidf_matrix.npz
+data/tfidf_vectorizer.pkl
+
+# Raw dataset — never commit this
+data/en.openfoodfacts.org.products.tsv
+data/*.zip
