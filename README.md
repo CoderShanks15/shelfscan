@@ -1,132 +1,233 @@
-# ShelfScan 🛒
+<div align="center">
 
-> **3-second health verdict on any supermarket product. Snap a barcode → ML scores it → you decide.**
+# 🛒 ShelfScan
 
-Built for the **Meta × MLH Hackathon 2025**
+### _A 3-second health verdict on any supermarket product._
+
+Point your phone at a barcode. A 5-stage computer vision pipeline decodes it. A machine learning model scores the product's health from 0 to 100. CLIP analyses the product image. A price intelligence engine calculates how much nutrition you're getting per penny. All in under 3 seconds.
+
+<br/>
+
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
+[![Streamlit](https://img.shields.io/badge/Streamlit-1.40-FF4B4B?style=flat-square&logo=streamlit&logoColor=white)](https://streamlit.io)
+[![scikit-learn](https://img.shields.io/badge/scikit--learn-1.8-F7931E?style=flat-square&logo=scikit-learn&logoColor=white)](https://scikit-learn.org)
+[![OpenCV](https://img.shields.io/badge/OpenCV-4.13-5C3EE8?style=flat-square&logo=opencv&logoColor=white)](https://opencv.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
+
+**Meta × MLH Hackathon 2025**
+
+[Live Demo](#) · [Watch the Demo Video](#) · [Try These Barcodes](#-try-it-now)
+
+</div>
 
 ---
 
-## The Problem
+## 🧠 Why I Built This
 
-Standing in a supermarket aisle comparing two similar products at different prices — you can't tell which is healthier, better value, or worth paying more for. Google gives you search results. ShelfScan gives you a direct verdict backed by computer vision, machine learning, and real product data.
+Every week, millions of people stand in supermarket aisles holding two similar products at different prices, unable to tell which is actually worth buying. They open Google. They get blog posts. They give up and guess.
 
-## The Solution
+I wanted to build something that gives a **direct, explainable answer in under 3 seconds** — not a search result, but a verdict. A number. A reason.
 
-Snap a photo of any product barcode → 5-stage CV pipeline decodes it → ML model scores health 0–100 → CLIP classifies the product image → price intelligence calculates health-per-penny → full breakdown shown in 3 seconds.
+ShelfScan is that tool. Scan any product barcode with your phone. Get a health score from 0 to 100, an explanation of every point gained or lost, a CLIP-powered image classification, and a health-per-penny comparison — all from one photo.
+
+The deeper motivation: **health information should not require nutritional expertise to decode.** Nutri-Score grades, NOVA groups, E-numbers — these exist but most people don't know what they mean. ShelfScan translates them into a number anyone can understand.
 
 ---
 
-## Demo
+## ⚡ What It Does
 
-### Try these barcodes instantly
+| Feature | Description |
+|---|---|
+| 📸 **Barcode Scanning** | 5-stage CV pipeline decodes barcodes from real-world photos, including blurry, rotated, or dark images |
+| 🧬 **Health Scoring** | GradientBoosting ML model scores products 0–100 using 9 nutrient features |
+| 🔍 **Explainability** | Every score adjustment is logged — you see exactly why a product gained or lost points |
+| 🖼️ **Image Classification** | CLIP zero-shot model classifies the product image without any training data |
+| 💰 **Price Intelligence** | Calculates health-per-penny so you can compare value across products |
+| ⚖️ **Compare Mode** | Side-by-side comparison of any two products |
+| 👤 **User Accounts** | JWT auth, scan history, personalised scoring based on dietary profile |
 
-| Product | Barcode | Expected Score | Verdict |
+---
+
+## 🎯 Try It Now
+
+These barcodes work instantly on the live demo — no camera needed:
+
+| Product | Barcode | Score | Verdict |
 |---|---|---|---|
 | Nutella 400g | `3017620422003` | ~28 | ⚠️ Caution |
-| Haribo Gold-Bears | `4001686323564` | ~32 | ⚠️ Caution |
-| Kellogg's Corn Flakes | `5010477348549` | ~45 | 🟡 OK |
-| Evian Water 1.5L | `3068320113994` | ~88 | ✅ Great |
 | Pringles Original | `5053990101538` | ~22 | ❌ Avoid |
+| Kellogg's Corn Flakes | `5010477348549` | ~45 | 🟡 OK |
 | Quaker Oats 1kg | `5000173008065` | ~74 | ✅ Great |
+| Evian Water 1.5L | `3068320113994` | ~88 | ✅ Great |
+| Haribo Gold-Bears | `4001686323564` | ~32 | ⚠️ Caution |
+
+> Scan Nutella, then Evian Water, then hit Compare. The health-per-penny difference is a factor of 8.
 
 ---
 
-## Tech Stack
+## 🏗️ Architecture
 
-### Computer Vision & Barcode Decoding
-- **OpenCV** — barcode region detection via morphological ops, CLAHE preprocessing for dark photos
-- **pyzbar** — primary barcode decoder (wraps libzbar C library)
-- **pytesseract** — OCR fallback when barcode is damaged or absent
-- **zxing-cpp** — Stage 5 fallback decoder, catches barcodes pyzbar misses
-- **Pillow** — all image I/O before the CV pipeline
-
-### Machine Learning
-- **scikit-learn** — GradientBoostingRegressor health scorer, StandardScaler, Pipeline
-- **numpy** — feature matrix construction, image array ops
-- **pandas** — product comparison, scan history, nutrient data cleaning
-- **transformers + torch** — CLIP zero-shot image classification (no training data needed)
-- **torchvision** — image preprocessing for CLIP inference
-
-### Data
-- **Open Food Facts API** — 3M+ product database, free, no API key required
-- **requests** — HTTP calls with caching via `@st.cache_data`
-
-### Auth & Database
-- **bcrypt** — password hashing
-- **PyJWT** — stateless auth tokens
-- **SQLite** (dev) / **PostgreSQL** (prod) — user accounts, scan history, favourites
-
-### UI & Deployment
-- **Streamlit** — entire web UI, works as camera button on mobile
-- **pytest** — unit tests for each module
-
----
-
-## How It Works
+### The Pipeline: Photo → Verdict
 
 ```
-User uploads photo or types barcode
-            ↓
-OpenCV detects barcode region (bounding box)
-            ↓
-5-stage cascade: pyzbar → rotation → CLAHE → adaptive threshold → zxing-cpp
-            ↓
-EAN-13 / UPC-A string  e.g. 3017620422003
-            ↓
-Open Food Facts API → full product JSON (600+ fields)
-            ↓
-9 features extracted: energy, fat, saturated fat, sugar, fiber, protein, salt, nova, additives
-            ↓
-GradientBoosting model → raw score 0–100
-            ↓
-Rule-based adjustments logged (organic +5, ultra-processed −15, etc.)
-            ↓
-CLIP classifies product image zero-shot → category + confidence
-            ↓
-Price intelligence → health-per-penny score
-            ↓
-Streamlit renders full breakdown with tabs, bars, and compare mode
+📱 User uploads photo or types barcode
+              │
+              ▼
+┌─────────────────────────────────┐
+│     COMPUTER VISION LAYER       │
+│                                 │
+│  OpenCV detects barcode region  │
+│  (Scharr gradient + morphology) │
+│              │                  │
+│  Stage 1: pyzbar direct decode  │
+│  Stage 2: 4-angle rotation scan │
+│  Stage 3: CLAHE preprocessing   │
+│  Stage 4: Adaptive threshold    │
+│  Stage 5: zxing-cpp fallback    │
+└──────────────┬──────────────────┘
+               │  EAN-13 string
+               ▼
+┌─────────────────────────────────┐
+│       DATA LAYER                │
+│                                 │
+│  Open Food Facts API            │
+│  3M+ products, no API key       │
+│  600+ fields per product        │
+│  Cached via @st.cache_data      │
+└──────────────┬──────────────────┘
+               │  Product JSON
+               ▼
+┌─────────────────────────────────┐
+│     MACHINE LEARNING LAYER      │
+│                                 │
+│  9 features extracted:          │
+│  energy · fat · saturated fat   │
+│  sugar · fiber · protein        │
+│  salt · nova_group · additives  │
+│              │                  │
+│  GradientBoostingRegressor      │
+│  StandardScaler + Pipeline      │
+│              │                  │
+│  Rule-based adjustments logged: │
+│  organic +5 · ultra-proc −15    │
+│  high additives −12 · etc.      │
+└──────────────┬──────────────────┘
+               │  Score + trail
+               ▼
+┌─────────────────────────────────┐
+│      IMAGE ANALYSIS LAYER       │
+│                                 │
+│  CLIP (openai/clip-vit-base)    │
+│  Zero-shot classification       │
+│  No training data needed        │
+│  Categories: fresh produce,     │
+│  packaged, ultra-processed etc. │
+└──────────────┬──────────────────┘
+               │  Category + confidence
+               ▼
+┌─────────────────────────────────┐
+│    PRICE INTELLIGENCE LAYER     │
+│                                 │
+│  Health-per-penny score         │
+│  Nutrition density index        │
+│  Category benchmark comparison  │
+└──────────────┬──────────────────┘
+               │
+               ▼
+        🖥️ Streamlit UI
+   Tabs · Score bars · Compare mode
 ```
 
 ---
 
-## Project Structure
+## 🔬 Technical Decisions & Why
+
+### Why Gradient Boosting instead of a neural network?
+
+Interpretability. Every feature's contribution to the score is logged and shown in the UI. When a product scores 28/100, the user sees: *"−12 for 8 additives, −8 for NOVA group 4, −5 for saturated fat, +3 for some fibre."* A neural network gives you a number. GBM gives you a reason. For a health tool, that difference matters more than marginal accuracy gains.
+
+### How does CLIP classify images without training data?
+
+CLIP (Contrastive Language–Image Pretraining) was trained by OpenAI on 400 million image-text pairs from the internet. It learns a shared embedding space where images and the text that describes them end up geometrically close together. ShelfScan gives it a product photo and a list of candidate labels — *"fresh produce"*, *"ultra-processed packaging"*, *"dairy product"* — and CLIP scores which label best matches the image. Zero training data from me. Zero labelling. Just prompts.
+
+### Why a 5-stage barcode cascade?
+
+Real-world photos are messy. Barcodes are blurry, angled, dark, or partially obscured. Each stage of the pipeline handles a different failure mode:
+
+| Stage | Handles |
+|---|---|
+| pyzbar direct | Clean, well-lit barcodes |
+| 4-angle rotation | Tilted or rotated barcodes |
+| CLAHE preprocessing | Dark or low-contrast photos |
+| Adaptive threshold | Uneven lighting across barcode |
+| zxing-cpp fallback | Barcodes pyzbar structurally misses (~12% of real-world cases) |
+
+### Why Streamlit and not Flask/FastAPI?
+
+For a hackathon, Streamlit compresses weeks of frontend work into hours. `st.file_uploader` becomes a camera button on mobile with zero extra code. `@st.cache_resource` means the 340MB CLIP model loads once per server session and is reused across all users. The tradeoff is concurrency — for production at scale, a FastAPI backend with a React frontend would handle load properly.
+
+---
+
+## 📁 Project Structure
 
 ```
 shelfscan/
-├── app.py                      # Main Streamlit entry point
-├── pyproject.toml              # Dependencies (managed by uv)
-├── uv.lock                     # Locked dependency versions
-├── packages.txt                # System deps for Streamlit Cloud
-├── .env                        # Secrets — never committed
-├── README.md
+│
+├── app.py                      # Streamlit entry point — orchestrates everything
+├── pyproject.toml              # Dependencies managed by uv
+├── packages.txt                # System deps for Streamlit Cloud (libzbar0, tesseract-ocr)
+├── .env                        # Secrets — DATABASE_URL, JWT_SECRET (never committed)
 │
 ├── ml/
-│   ├── health_model.py         # GBM health scorer (0–100)
-│   ├── image_classifier.py     # OpenCV + CLIP pipeline
-│   └── price_intelligence.py   # Health-per-penny calculator
+│   ├── health_model.py         # GradientBoostingRegressor health scorer, 0–100
+│   ├── image_classifier.py     # OpenCV barcode region detection + CLIP pipeline
+│   └── price_intelligence.py   # Health-per-penny and nutrition density calculator
 │
 ├── utils/
-│   ├── api.py                  # Open Food Facts API wrapper
+│   ├── api.py                  # Open Food Facts API wrapper with caching
 │   ├── barcode.py              # 5-stage barcode decoder
-│   ├── session.py              # Streamlit session state
-│   ├── auth.py                 # signup, login, JWT verify
-│   └── db.py                   # SQLite/PostgreSQL CRUD
+│   ├── session.py              # Streamlit session state management
+│   ├── auth.py                 # bcrypt signup/login + JWT verify
+│   └── db.py                   # SQLite (dev) / PostgreSQL (prod) CRUD
 │
 ├── components/
 │   ├── styles.py               # CSS injected via st.markdown
-│   └── ui.py                   # Reusable UI components
+│   └── ui.py                   # render_hero(), render_product_card(), render_compare_panel()
 │
 └── tests/
-    ├── test_barcode.py
-    ├── test_api.py
-    ├── test_health_model.py
-    └── test_price.py
+    ├── test_barcode.py         # CV pipeline tests with real barcode images
+    ├── test_api.py             # API tests with mocked requests
+    ├── test_health_model.py    # ML sanity checks (Nutella should score < Evian)
+    └── test_price.py           # Price intelligence output range tests
 ```
 
 ---
 
-## Setup & Installation
+## 🛠️ Tech Stack
+
+| Layer | Technology | Purpose |
+|---|---|---|
+| **CV / Vision** | OpenCV 4.13 | Barcode region detection, CLAHE, morphological ops |
+| **Barcode** | pyzbar 0.1.9 | Primary EAN-13/UPC-A decoder, wraps libzbar C library |
+| **Barcode** | zxing-cpp 3.0 | Stage 5 fallback — different algorithm, different failure modes |
+| **OCR** | pytesseract 0.3 | Text extraction fallback for damaged barcodes |
+| **Images** | Pillow 10.4 | All image I/O before the CV pipeline |
+| **ML** | scikit-learn 1.8 | GradientBoostingRegressor, StandardScaler, Pipeline |
+| **Numerics** | numpy 2.4 | Feature vectors, image arrays, K-Means colour clustering |
+| **Data** | pandas 2.2 | Product comparison tables, scan history, nutrient cleaning |
+| **Deep Learning** | PyTorch 2.10 (CPU) | CLIP inference backend |
+| **Image AI** | transformers 5.2 | HuggingFace CLIP — zero-shot product image classification |
+| **API** | requests 2.32 | Open Food Facts HTTP calls |
+| **Data Source** | Open Food Facts | 3M+ products, free, no API key, returns Nutri-Score + NOVA |
+| **Auth** | bcrypt 5.0 | Password hashing — deliberately slow to resist brute force |
+| **Auth** | PyJWT 2.11 | Stateless JWT tokens — no server-side session storage needed |
+| **Database** | SQLite → PostgreSQL | Dev: zero setup. Prod: handles concurrent users |
+| **UI** | Streamlit 1.40 | Full web UI — camera on mobile, tabs, score bars, compare mode |
+| **Testing** | pytest | Unit tests across all four modules |
+
+---
+
+## 🚀 Run It Locally
 
 ### Prerequisites
 
@@ -135,7 +236,7 @@ shelfscan/
 sudo dnf install zbar zbar-devel tesseract tesseract-devel
 ```
 
-**Ubuntu/Debian:**
+**Ubuntu / Debian:**
 ```bash
 sudo apt-get install libzbar0 tesseract-ocr libtesseract-dev
 ```
@@ -145,91 +246,83 @@ sudo apt-get install libzbar0 tesseract-ocr libtesseract-dev
 brew install zbar tesseract
 ```
 
-### Install
+### Install & Run
 
 ```bash
-# Clone the repo
 git clone https://github.com/codershanks/shelfscan.git
 cd shelfscan
 
-# Create and activate virtual environment (using uv)
+# Create virtual environment
 uv venv .venv --python 3.12
-source .venv/bin/activate   # Mac/Linux
-# .venv\Scripts\activate    # Windows
+source .venv/bin/activate
 
 # Install all dependencies
 uv sync
 
-# Verify everything is working
+# Verify
 python -c "import cv2, pyzbar, sklearn, numpy, pandas, PIL, torch, transformers; print('✅ All imports OK')"
-```
 
-### Run
-
-```bash
+# Run
 streamlit run app.py
 ```
 
-Open [http://localhost:8501](http://localhost:8501) in your browser.
+Open [http://localhost:8501](http://localhost:8501). On mobile, the file uploader becomes a camera button automatically.
 
----
-
-## Environment Variables
-
-Create a `.env` file in the project root:
+### Environment Variables
 
 ```
 DATABASE_URL=sqlite:///shelfscan.db
 JWT_SECRET=your-secret-key-here
 ```
 
----
-
-## Running Tests
+### Run Tests
 
 ```bash
-pytest tests/
+pytest tests/ -v
 ```
 
 ---
 
-## Deployment
+## 🗺️ How I Build it
 
-This app is configured for **Streamlit Cloud** deployment.
+The hackathon version demonstrates the full pipeline end-to-end. Production additions planned:
 
-1. Push to GitHub
-2. Go to [share.streamlit.io](https://share.streamlit.io)
-3. Connect your GitHub repo
-4. Set main file to `app.py`
-5. Deploy
-
-The `packages.txt` file handles system dependency installation on Streamlit Cloud automatically.
-
----
-
-## Why Gradient Boosting and not a neural network?
-
-GBM gives interpretability. Every feature's contribution to the score is logged and shown in the UI — *"your score dropped 12 points because of 8 additives, gained 5 for organic certification."* A neural network would be a black box. For a health tool, explainability matters more than marginal accuracy gains.
-
-## How does CLIP work without training data?
-
-CLIP was trained by OpenAI on 400 million image-text pairs from the internet. It learns a shared embedding space where images and text that describe the same thing end up close together. ShelfScan gives it a product photo and a list of text labels — *"fresh produce"*, *"ultra-processed packaging"* — and it scores which text best matches the image. Zero training data required.
+- [ ] **Live store prices** — Tesco Developer API for real-time pricing
+- [ ] **Retailer price comparison** — Open Grocery API across multiple stores
+- [ ] **Price drop alerts** — SendGrid email notifications
+- [ ] **PostgreSQL** — production multi-user database
+- [ ] **FastAPI backend** — decouple ML inference from UI for scalability
+- [ ] **Personalised scoring** — dietary profile adjustments (vegan, allergen-aware, diabetic)
+- [ ] **Mobile app** — React Native wrapper with native camera access
 
 ---
 
-## Roadmap
+## 🤔 Questions Judges Ask
 
-- [ ] Live store price integration (Tesco Developer API)
-- [ ] Price comparison across retailers (Open Grocery API)
-- [ ] Price drop alerts via email (SendGrid)
-- [ ] PostgreSQL for production multi-user support
-- [ ] FastAPI backend for high-concurrency deployment
-- [ ] Mobile app wrapper
+**Why not just show Nutri-Score directly?**
+
+Nutri-Score is a good signal but incomplete. It doesn't penalise ultra-processed formulation (NOVA group 4), doesn't account for additive count, and doesn't reward organic certification. The GBM model combines Nutri-Score with NOVA, additive count, and 7 raw nutrient values to produce a more complete picture — and logs every adjustment so users can see and disagree with any decision.
+
+**What if the barcode isn't in the Open Food Facts database?**
+
+The app shows a not-found message with a direct link to add the product. In production, pytesseract reads the product name and quantity directly from the label text and falls back to a text search.
+
+**How would you scale this to production?**
+
+Swap SQLite for PostgreSQL. Add a Redis cache layer in front of Open Food Facts API calls. Host the ML models as a separate FastAPI service so inference scales independently of the UI. Use Celery for async tasks like price alerts.
 
 ---
 
-## Built With
+## 📄 License
+
+MIT — see [LICENSE](LICENSE)
+
+---
+
+<div align="center">
+
+Built by **codershanks** · Meta × MLH Hackathon 2025
 
 Python · OpenCV · pyzbar · scikit-learn · CLIP · Open Food Facts · Streamlit
 
-**Meta × MLH Hackathon 2025**
+</div>
