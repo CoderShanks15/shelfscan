@@ -1,0 +1,27 @@
+[project]
+name = "shelfscan"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "altair>=5.0.0",
+    "bcrypt>=5.0.0",
+    "numpy>=2.4.2",
+    "opencv-python-headless>=4.13.0.92",
+    "pandas==2.2.3",
+    "pillow==10.4.0",
+    "pyjwt>=2.11.0",
+    "pytesseract>=0.3.13",
+    "pyzbar>=0.1.9",
+    "requests>=2.32.5",
+    "scikit-learn>=1.8.0",
+    "streamlit==1.40.2",
+    "torch>=2.10.0",
+    "torchvision>=0.25.0",
+    "transformers>=5.2.0",
+    "zxing-cpp>=3.0.0",
+]
+
+[[tool.uv.index]]
+url = "https://download.pytorch.org/whl/cpu"
