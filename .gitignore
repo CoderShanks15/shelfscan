@@ -13,3 +13,4 @@ data/en.openfoodfacts.org.products.tsv
 data/*.zip
 data/health_model.pkl
 data/model_meta.json
+models/
