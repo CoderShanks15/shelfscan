@@ -1,53 +1,50 @@
 """
-utils/auth.py
-=============
+auth/auth.py
+============
 Authentication layer for ShelfScan.
 bcrypt password hashing + JWT session tokens.
 
-Security improvements:
-- Requires JWT_SECRET environment variable (no insecure default)
-- Stronger email validation
-- Generic login error to prevent account enumeration
-- JWT includes issued-at (iat)
-- Configurable bcrypt cost via env
-- Rate limiting on login to prevent brute-force attacks
-- Token revocation support for logout/invalidation
-- Timing-safe login to prevent account enumeration via response time
+Security:
+- JWT_SECRET loaded from core.config — fails loud in production if missing,
+  warns in development.
+- Timing-safe login — bcrypt always runs even for unknown emails.
+- Rate limiting per email — configurable via MAX_LOGIN_ATTEMPTS / LOCKOUT_SECONDS.
+- Token revocation denylist — call revoke_token() on logout.
+- Generic error messages — prevents account enumeration.
 """
 
-import os
+import logging
 import re
 import time
-import jwt
+
 import bcrypt
+import jwt
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
-from utils.db import create_user, get_user_by_email
+from core.config import (
+    JWT_SECRET,
+    JWT_EXPIRY_DAYS,
+    BCRYPT_ROUNDS,
+    MAX_LOGIN_ATTEMPTS,
+    LOCKOUT_SECONDS,
+)
+from database.db import create_user, get_user_by_email
+
+logger = logging.getLogger(__name__)
 
 # -----------------------------------------------------------------------
 # CONFIG
 # -----------------------------------------------------------------------
 
-JWT_SECRET = os.environ.get("JWT_SECRET")
-if not JWT_SECRET:
-    raise RuntimeError("JWT_SECRET environment variable must be set")
-
-JWT_EXPIRY_DAYS = int(os.environ.get("JWT_EXPIRY_DAYS", 7))
-BCRYPT_ROUNDS   = int(os.environ.get("BCRYPT_ROUNDS", 12))
-ALGORITHM       = "HS256"
-
-EMAIL_RE = re.compile(r"^[^@]+@[^@]+\.[^@]+$")
+ALGORITHM = "HS256"
+EMAIL_RE  = re.compile(r"^[^@]+@[^@]+\.[^@]+$")
 
 # -----------------------------------------------------------------------
 # RATE LIMITING
 # -----------------------------------------------------------------------
 
-MAX_LOGIN_ATTEMPTS = int(os.environ.get("MAX_LOGIN_ATTEMPTS", 5))
-LOCKOUT_SECONDS    = int(os.environ.get("LOCKOUT_SECONDS", 300))  # 5 minutes
-
-# Maps email -> list of failed attempt timestamps.
-# Replace with Redis in production for multi-instance deployments:
+# In-process store. Replace with Redis in production:
 #   redis_client.zadd(f"login_attempts:{email}", {now: now})
 #   redis_client.zremrangebyscore(f"login_attempts:{email}", 0, now - LOCKOUT_SECONDS)
 _login_attempts: dict[str, list[float]] = defaultdict(list)
@@ -59,10 +56,9 @@ def _is_rate_limited(email: str) -> bool:
     within the LOCKOUT_SECONDS window.
     Prunes stale timestamps on every call.
     """
-    now = time.monotonic()
+    now          = time.monotonic()
     window_start = now - LOCKOUT_SECONDS
 
-    # Discard attempts outside the current window
     _login_attempts[email] = [
         t for t in _login_attempts[email] if t > window_start
     ]
@@ -86,29 +82,31 @@ _revoked_tokens: set[str] = set()
 def revoke_token(token: str) -> None:
     """
     Revoke a JWT so it is rejected by verify_jwt even before expiry.
-    Call this on logout or when a token is suspected compromised.
+    Call on logout or when a token is suspected compromised.
     """
     _revoked_tokens.add(token)
 
 
 # -----------------------------------------------------------------------
-# PASSWORD
+# PASSWORD HELPERS
 # -----------------------------------------------------------------------
 
-# A pre-computed dummy hash used in login() to ensure bcrypt always runs,
-# preventing timing attacks that would reveal whether an email is registered.
-_DUMMY_HASH = bcrypt.hashpw(b"dummy-timing-password", bcrypt.gensalt(rounds=BCRYPT_ROUNDS)).decode()
+# Pre-computed dummy hash — ensures bcrypt always runs in login(),
+# preventing timing attacks that reveal whether an email is registered.
+_DUMMY_HASH = bcrypt.hashpw(
+    b"dummy-timing-password",
+    bcrypt.gensalt(rounds=BCRYPT_ROUNDS)
+).decode()
 
 
 def _hash_password(password: str) -> str:
-    """Hash a password using bcrypt."""
     return bcrypt.hashpw(
         password.encode(), bcrypt.gensalt(rounds=BCRYPT_ROUNDS)
     ).decode()
 
 
 def _check_password(password: str, hashed: str) -> bool:
-    """Verify password against stored bcrypt hash. Never raises."""
+    """Verify password against bcrypt hash. Never raises."""
     try:
         return bcrypt.checkpw(password.encode(), hashed.encode())
     except Exception:
@@ -116,12 +114,11 @@ def _check_password(password: str, hashed: str) -> bool:
 
 
 # -----------------------------------------------------------------------
-# JWT
+# JWT HELPERS
 # -----------------------------------------------------------------------
 
 def _create_token(user_id: int, email: str) -> str:
-    """Create a signed JWT token for a user session."""
-    now = datetime.now(timezone.utc)
+    now     = datetime.now(timezone.utc)
     payload = {
         "user_id": user_id,
         "email":   email,
@@ -134,9 +131,8 @@ def _create_token(user_id: int, email: str) -> str:
 def verify_jwt(token: str) -> int | None:
     """
     Verify a JWT token.
-    Returns user_id if valid, otherwise None.
+    Returns user_id if valid and not revoked, otherwise None.
     """
-    # Reject revoked tokens before any cryptographic work
     if token in _revoked_tokens:
         return None
 
@@ -148,7 +144,6 @@ def verify_jwt(token: str) -> int | None:
             options={"verify_aud": False},
         )
         return payload.get("user_id")
-
     except jwt.ExpiredSignatureError:
         return None
     except jwt.InvalidTokenError:
@@ -160,19 +155,15 @@ def verify_jwt(token: str) -> int | None:
 # -----------------------------------------------------------------------
 
 def _valid_email(email: str) -> bool:
-    """Return True if email matches basic email pattern."""
     return bool(EMAIL_RE.match(email))
 
 
 def _valid_password(password: str) -> bool:
-    """
-    Basic password policy: minimum 8 characters.
-    """
     return isinstance(password, str) and len(password) >= 8
 
 
 # -----------------------------------------------------------------------
-# SIGNUP / LOGIN
+# PUBLIC API
 # -----------------------------------------------------------------------
 
 def signup(email: str, password: str) -> dict:
@@ -198,12 +189,7 @@ def signup(email: str, password: str) -> dict:
         return {"ok": False, "error": "Email already registered."}
 
     token = _create_token(user_id, email)
-    return {
-        "ok":      True,
-        "token":   token,
-        "user_id": user_id,
-        "email":   email,
-    }
+    return {"ok": True, "token": token, "user_id": user_id, "email": email}
 
 
 def login(email: str, password: str) -> dict:
@@ -222,26 +208,15 @@ def login(email: str, password: str) -> dict:
     """
     email = (email or "").strip().lower()
 
-    # Check rate limit before doing any DB or bcrypt work
     if _is_rate_limited(email):
         return {"ok": False, "error": "Too many attempts. Please try again later."}
 
-    user = get_user_by_email(email)
-
-    # Always run bcrypt to normalize response time.
-    # If the user doesn't exist, compare against a dummy hash so the
-    # function takes the same amount of time either way.
+    user          = get_user_by_email(email)
     hash_to_check = user["password_hash"] if user else _DUMMY_HASH
     password_ok   = _check_password(password, hash_to_check)
 
-    # Generic error prevents leaking whether the email is registered
     if not user or not password_ok:
         return {"ok": False, "error": "Invalid email or password."}
 
     token = _create_token(user["id"], email)
-    return {
-        "ok":      True,
-        "token":   token,
-        "user_id": user["id"],
-        "email":   email,
-    }
+    return {"ok": True, "token": token, "user_id": user["id"], "email": email}
