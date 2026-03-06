@@ -5,10 +5,23 @@ Reusable Streamlit rendering functions for ShelfScan.
 
 All functions render via st.markdown with HTML for custom styling,
 or standard Streamlit widgets where appropriate.
+
+Security: All API-sourced text is escaped via html.escape() before
+injection into HTML templates to prevent XSS.
 """
 
+import html
 import streamlit as st
 from typing import Optional
+
+
+# -----------------------------------------------------------------------
+# HELPERS
+# -----------------------------------------------------------------------
+
+def _esc(text) -> str:
+    """Escape any value for safe HTML injection."""
+    return html.escape(str(text)) if text else ""
 
 
 # -----------------------------------------------------------------------
@@ -42,13 +55,17 @@ def render_product_card(
     Full product display: name, score bar, verdict badge,
     nutrient breakdown, adjustments trail, and price intelligence.
     """
-    name    = product.get("name", "Unknown Product")
-    brand   = product.get("brand", "")
-    barcode = product.get("barcode", "")
+    name    = _esc(product.get("name", "Unknown Product"))
+    brand   = _esc(product.get("brand", ""))
+    barcode = _esc(product.get("barcode", ""))
     score   = health.get("score", 0)
-    verdict = health.get("verdict", "OK")
-    emoji   = health.get("verdict_emoji", "")
-    css_cls = verdict.lower().replace(" ", "")
+    verdict = _esc(health.get("verdict", "OK"))
+    emoji   = _esc(health.get("verdict_emoji", ""))
+    css_cls = health.get("verdict", "OK").lower().replace(" ", "")
+
+    nutriscore = _esc(product.get('nutriscore', '?'))
+    nova = _esc(product.get('nova_group', '?'))
+    quantity = _esc(product.get('quantity', ''))
 
     # --- Header ---
     st.markdown(f"""
@@ -56,9 +73,9 @@ def render_product_card(
         <div class="product-name">{emoji} {name}</div>
         <div class="product-brand">{brand} · {barcode}</div>
         <div class="product-meta">
-            <span class="meta-tag">Nutri-Score {product.get('nutriscore', '?')}</span>
-            <span class="meta-tag">NOVA {product.get('nova_group', '?')}</span>
-            <span class="meta-tag">{product.get('quantity', '')}</span>
+            <span class="meta-tag">Nutri-Score {nutriscore}</span>
+            <span class="meta-tag">NOVA {nova}</span>
+            <span class="meta-tag">{quantity}</span>
         </div>
     """, unsafe_allow_html=True)
 
@@ -84,7 +101,7 @@ def render_product_card(
             "fiber": "Fiber", "protein": "Protein", "additives": "Additives",
         }
         for key, label in label_map.items():
-            val = breakdown.get(key, "—")
+            val = _esc(breakdown.get(key, "—"))
             items_html += f"""
                 <div class="nutrient-item">
                     <div class="nutrient-label">{label}</div>
@@ -101,8 +118,9 @@ def render_product_card(
     if adjustments:
         adj_html = ""
         for adj in adjustments:
+            adj_escaped = _esc(adj)
             css = "adj-positive" if adj.startswith("+") else "adj-negative"
-            adj_html += f'<div class="adjustment-item {css}">{adj}</div>'
+            adj_html += f'<div class="adjustment-item {css}">{adj_escaped}</div>'
 
         st.markdown(f"""
             <div class="section-header">Score Adjustments</div>
@@ -126,8 +144,8 @@ def _render_price_section(price: dict):
     density   = price.get("nutrition_density", 0)
     benchmark = price.get("category_benchmark", 0)
     vs        = price.get("vs_benchmark", 0)
-    verdict   = price.get("value_verdict", "")
-    emoji     = price.get("value_emoji", "")
+    verdict   = _esc(price.get("value_verdict", ""))
+    emoji     = _esc(price.get("value_emoji", ""))
     hpp       = price.get("health_per_penny")
 
     items_html = f"""
@@ -151,21 +169,23 @@ def _render_price_section(price: dict):
             <div class="nutrient-value">{hpp:.2f}</div>
         </div>"""
 
+    explanation = _esc(price.get('explanation', ''))
+
     st.markdown(f"""
         <div class="section-header">{emoji} Value — {verdict}</div>
         <div class="nutrient-grid">{items_html}</div>
         <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.3rem;">
-            {price.get('explanation', '')}
+            {explanation}
         </div>
     """, unsafe_allow_html=True)
 
 
 def _render_image_section(image_result: dict):
     """Render image classification results within a product card."""
-    category   = image_result.get("category", "unknown")
+    category   = _esc(image_result.get("category", "unknown"))
     confidence = image_result.get("confidence", 0)
     clip_on    = image_result.get("clip_available", False)
-    processing = image_result.get("processing_level", "unknown")
+    processing = _esc(image_result.get("processing_level", "unknown"))
     naturalness = image_result.get("colour_naturalness", 0)
     reasoning  = image_result.get("reasoning", [])
 
@@ -197,7 +217,7 @@ def _render_image_section(image_result: dict):
     if reasoning:
         for r in reasoning:
             st.markdown(
-                f'<div class="adjustment-item">{r}</div>',
+                f'<div class="adjustment-item">{_esc(r)}</div>',
                 unsafe_allow_html=True,
             )
 
@@ -223,7 +243,7 @@ def render_compare_panel(items: list):
 
     # Summary comparison
     scores = [item["health"].get("score", 0) for item in items]
-    names  = [item["product"].get("name", "Product") for item in items]
+    names  = [_esc(item["product"].get("name", "Product")) for item in items]
     best_idx = scores.index(max(scores))
 
     st.markdown(f"""
@@ -232,18 +252,18 @@ def render_compare_panel(items: list):
             ✅ {names[best_idx]} wins with {scores[best_idx]}/100
         </div>
         <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.3rem;">
-            Score difference: {abs(scores[0] - scores[1]):.1f} points
+            Score difference: {max(scores) - min(scores):.1f} points
         </div>
     </div>
     """, unsafe_allow_html=True)
 
 
 # -----------------------------------------------------------------------
-# HISTORY TABLE
+# HISTORY TABLE (FIX #22: added timestamps)
 # -----------------------------------------------------------------------
 
 def render_history_table(history: list):
-    """Render scan history as a styled list."""
+    """Render scan history as a styled list with timestamps."""
     if not history:
         st.info("No scan history yet. Scan some products to build your history!")
         return
@@ -251,9 +271,9 @@ def render_history_table(history: list):
     st.markdown("""
     <div class="history-row">
         <span>Product</span>
-        <span>Brand</span>
         <span>Score</span>
         <span>Verdict</span>
+        <span>When</span>
     </div>
     """, unsafe_allow_html=True)
 
@@ -261,13 +281,53 @@ def render_history_table(history: list):
         score = row.get("score", 0) or 0
         verdict = row.get("verdict", "")
         css_cls = verdict.lower().replace(" ", "") if verdict else ""
+        name = _esc(row.get('name', 'Unknown'))
+        scanned_at = _esc(row.get('scanned_at', ''))
+        # Show just date portion if available
+        date_display = scanned_at[:10] if len(scanned_at) >= 10 else scanned_at
 
         st.markdown(f"""
         <div class="history-row">
-            <span style="color: var(--text-primary);">{row.get('name', 'Unknown')}</span>
-            <span style="color: var(--text-secondary);">{row.get('brand', '')}</span>
+            <span style="color: var(--text-primary);">{name}</span>
             <span class="score-value {css_cls}" style="font-size: 0.9rem;">{score:.0f}</span>
-            <span class="verdict-badge {css_cls}" style="font-size: 0.7rem;">{verdict}</span>
+            <span class="verdict-badge {css_cls}" style="font-size: 0.7rem;">{_esc(verdict)}</span>
+            <span style="color: var(--text-muted); font-size: 0.75rem;">{date_display}</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+
+# -----------------------------------------------------------------------
+# FAVOURITES TABLE (FIX #21: new)
+# -----------------------------------------------------------------------
+
+def render_favourites_table(favourites: list):
+    """Render user's favourite products."""
+    if not favourites:
+        st.info("No favourites yet. Scan a product and click ❤️ Save Favourite!")
+        return
+
+    st.markdown("""
+    <div class="history-row">
+        <span>Product</span>
+        <span>Brand</span>
+        <span>Score</span>
+        <span>Saved</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    for row in favourites:
+        score = row.get("score", 0) or 0
+        name = _esc(row.get('name', 'Unknown'))
+        brand = _esc(row.get('brand', ''))
+        added_at = _esc(row.get('added_at', ''))
+        date_display = added_at[:10] if len(added_at) >= 10 else added_at
+
+        st.markdown(f"""
+        <div class="history-row">
+            <span style="color: var(--text-primary);">{name}</span>
+            <span style="color: var(--text-secondary);">{brand}</span>
+            <span style="font-weight: 600; font-size: 0.9rem;">{score:.0f}</span>
+            <span style="color: var(--text-muted); font-size: 0.75rem;">{date_display}</span>
         </div>
         """, unsafe_allow_html=True)
 
@@ -292,7 +352,7 @@ def render_auth_sidebar(on_login, on_signup, on_logout, logged_in: bool, email: 
 
         if logged_in:
             st.markdown(f"""
-            <div class="auth-header">👤 {email}</div>
+            <div class="auth-header">👤 {_esc(email)}</div>
             """, unsafe_allow_html=True)
 
             if st.button("🚪 Logout", use_container_width=True):

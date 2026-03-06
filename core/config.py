@@ -8,6 +8,13 @@ All environment variables are defined here.
 import logging
 import os
 
+# Load .env file if python-dotenv is installed (optional dev convenience)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------
@@ -60,11 +67,11 @@ DATABASE_URL = os.environ.get(
 
 MODEL_PATH = os.environ.get(
     "MODEL_PATH",
-    "data/health_model.pkl"
+    "models/health_model.pkl"
 )
 
 # ---------------------------------------------------------------------
 # APP
 # ---------------------------------------------------------------------
 
-MAX_COMPARE_ITEMS = 2
+MAX_COMPARE_ITEMS = 4

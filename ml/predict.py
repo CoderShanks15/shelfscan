@@ -27,8 +27,9 @@ import json
 import pickle
 import numpy as np
 
-MODEL_PATH = 'models/health_model.pkl'
-META_PATH  = 'data/model_meta.json'
+from core.config import MODEL_PATH
+
+META_PATH = 'data/model_meta.json'
 
 # Module-level cache — loaded once, reused on every scan
 _model                  = None

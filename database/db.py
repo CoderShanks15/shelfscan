@@ -24,8 +24,9 @@ import json
 import sqlite3
 import contextlib
 
-DATABASE_URL = os.environ.get('DATABASE_URL', 'data/shelfscan.db')
-os.makedirs('data', exist_ok=True)
+from core.config import DATABASE_URL
+
+_tables_created = False
 
 
 # -----------------------------------------------------------------------
@@ -37,11 +38,24 @@ def _conn():
     """
     Context manager — single connection per operation.
     Auto-commits on success, rolls back on error, always closes.
+    Ensures data directory and tables exist on first call.
     """
+    global _tables_created
+
+    # Ensure directory exists (handles both 'data/shelfscan.db' and '/abs/path.db')
+    db_dir = os.path.dirname(DATABASE_URL)
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
+
     conn = sqlite3.connect(DATABASE_URL, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
+
+    if not _tables_created:
+        _create_schema(conn)
+        _tables_created = True
+
     try:
         yield conn
         conn.commit()
@@ -56,11 +70,9 @@ def _conn():
 # SCHEMA
 # -----------------------------------------------------------------------
 
-def create_tables():
-    """Create all tables and indexes if they don't exist.
-    Safe to call on every startup."""
-    with _conn() as conn:
-        conn.executescript("""
+def _create_schema(conn):
+    """Create all tables and indexes. Called once on first connection."""
+    conn.executescript("""
             CREATE TABLE IF NOT EXISTS users (
                 id              INTEGER PRIMARY KEY AUTOINCREMENT,
                 email           TEXT    UNIQUE NOT NULL,
@@ -104,7 +116,13 @@ def create_tables():
             CREATE INDEX IF NOT EXISTS idx_scan_barcode
                 ON scan_history(barcode);
         """)
+    conn.commit()
 
+
+def create_tables():
+    """Public function for explicit schema creation (e.g. from scripts)."""
+    with _conn():
+        pass  # _conn() handles schema creation on first call
 
 # -----------------------------------------------------------------------
 # INPUT VALIDATION HELPERS
@@ -319,5 +337,5 @@ def is_favourite(user_id: int, barcode: str) -> bool:
 
 # -----------------------------------------------------------------------
 # STARTUP
-# -----------------------------------------------------------------------
-create_tables()
+# No longer auto-create tables at import time.
+# Tables are created lazily on first _conn() call.

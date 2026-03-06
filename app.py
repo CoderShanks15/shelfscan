@@ -11,7 +11,10 @@ Run:
     streamlit run app.py
 """
 
+import logging
 import streamlit as st
+
+logger = logging.getLogger(__name__)
 
 # -----------------------------------------------------------------------
 # PAGE CONFIG — must be first Streamlit call
@@ -34,6 +37,7 @@ from components.ui import (
     render_product_card,
     render_compare_panel,
     render_history_table,
+    render_favourites_table,
     render_auth_sidebar,
 )
 from session.session import (
@@ -55,7 +59,10 @@ from services.barcode import decode_barcode_from_image, validate_barcode
 from ml.predict import predict_health
 from ml.price_intelligence import PriceIntelligence
 from auth.auth import login, signup, revoke_token
-from database.db import save_scan, get_history, save_favourite, remove_favourite, is_favourite
+from database.db import (
+    save_scan, get_history, save_favourite, remove_favourite,
+    is_favourite, get_favourites,
+)
 
 
 # -----------------------------------------------------------------------
@@ -114,7 +121,8 @@ def run_scan_pipeline(barcode: str, uploaded_image: Image.Image | None = None):
     with st.spinner("🔍 Fetching product data..."):
         product = fetch_product(barcode)
 
-    if product is None:
+    # Handle missing product or API errors
+    if not product or not isinstance(product, dict):
         st.error(
             f"Product not found for barcode **{barcode}**. "
             f"[Add it to Open Food Facts →]"
@@ -126,16 +134,30 @@ def run_scan_pipeline(barcode: str, uploaded_image: Image.Image | None = None):
         st.error(f"API error: {product['error']}")
         return
 
-    # --- ML health scoring ---
-    with st.spinner("🧬 Calculating health score..."):
-        health = predict_health(product)
+    # --- ML health scoring (with error boundary) ---
+    try:
+        with st.spinner("🧬 Calculating health score..."):
+            health = predict_health(product)
+    except FileNotFoundError:
+        st.error(
+            "⚠️ Health model not found. Ensure `models/health_model.pkl` exists. "
+            "Run `python ml/health_model.py` to train it."
+        )
+        return
+    except Exception as e:
+        logger.exception("predict_health failed")
+        st.error(f"⚠️ Health scoring failed: {e}")
+        return
 
     # --- Image classification (if image provided) ---
     image_result = None
     classifier = load_image_classifier()
     if classifier and uploaded_image:
-        with st.spinner("🖼️ Analysing image..."):
-            image_result = classifier.classify(uploaded_image, product)
+        try:
+            with st.spinner("🖼️ Analysing image..."):
+                image_result = classifier.classify(uploaded_image, product)
+        except Exception as e:
+            logger.warning("Image classification failed: %s", e)
 
     # --- Price intelligence ---
     category = image_result.get("category") if image_result else None
@@ -159,13 +181,13 @@ def main():
     init_session()
     inject_css()
 
-    # Auth sidebar
+    # Auth sidebar — FIX #1: use correct session key "email" not "user_email"
     render_auth_sidebar(
         on_login=_handle_login,
         on_signup=_handle_signup,
         on_logout=_handle_logout,
         logged_in=is_logged_in(),
-        email=st.session_state.get("user_email", ""),
+        email=st.session_state.get("email", ""),
     )
 
     # Sidebar extras
@@ -173,7 +195,7 @@ def main():
         st.markdown("---")
         st.markdown(
             '<div style="font-size: 0.75rem; color: var(--text-muted);">'
-            '🛒 ShelfScan · Meta × MLH 2025<br>'
+            '🛒 ShelfScan<br>'
             'Built by codershanks</div>',
             unsafe_allow_html=True,
         )
@@ -181,19 +203,35 @@ def main():
     # Hero
     render_hero()
 
-    # Tabs
-    tab_scan, tab_compare, tab_history = st.tabs(["🔍 Scan", "⚖️ Compare", "📋 History"])
+    # Tabs — FIX #21: added Favourites tab
+    tab_scan, tab_compare, tab_favs, tab_history = st.tabs(
+        ["🔍 Scan", "⚖️ Compare", "❤️ Favourites", "📋 History"]
+    )
 
     # ---- SCAN TAB ----
     with tab_scan:
         col_input, col_or, col_manual = st.columns([2, 0.3, 2])
 
         with col_input:
-            uploaded = st.file_uploader(
-                "📸 Upload a barcode photo",
-                type=["jpg", "jpeg", "png", "webp"],
-                help="Take a photo of any product barcode. Works with blurry or dark images too.",
+            # FIX #18: Camera input + file upload
+            input_mode = st.radio(
+                "Input method",
+                ["📸 Upload photo", "📷 Camera"],
+                horizontal=True,
+                label_visibility="collapsed",
             )
+
+            if input_mode == "📷 Camera":
+                uploaded = st.camera_input(
+                    "Take a photo of the barcode",
+                    help="Point your camera at a product barcode.",
+                )
+            else:
+                uploaded = st.file_uploader(
+                    "📸 Upload a barcode photo",
+                    type=["jpg", "jpeg", "png", "webp"],
+                    help="Take a photo of any product barcode.",
+                )
 
         with col_or:
             st.markdown(
@@ -209,8 +247,12 @@ def main():
                 help="Type or paste an EAN-13, UPC-A, or EAN-8 barcode number.",
             )
 
+        # FIX #5: Guard against double scan on rerun.
+        # Only run the pipeline if we don't already have a result for this input.
+        already_scanned = st.session_state.get("current_product") is not None
+
         # --- Process uploaded image ---
-        if uploaded is not None:
+        if uploaded is not None and not already_scanned:
             image = Image.open(uploaded)
 
             # Show preview
@@ -230,7 +272,7 @@ def main():
                 )
 
         # --- Process manual barcode ---
-        if manual_barcode:
+        if manual_barcode and not already_scanned:
             barcode = manual_barcode.strip()
             if validate_barcode(barcode):
                 run_scan_pipeline(barcode)
@@ -265,7 +307,7 @@ def main():
                             st.rerun()
 
             with col_c:
-                if st.button("🗑️ Clear", use_container_width=True):
+                if st.button("🔄 New Scan", use_container_width=True):
                     clear_scan()
                     st.rerun()
 
@@ -284,6 +326,14 @@ def main():
                 "No products to compare yet. Scan a product and click "
                 "**Add to Compare** to start comparing."
             )
+
+    # ---- FAVOURITES TAB ---- (FIX #21)
+    with tab_favs:
+        if is_logged_in():
+            favs = get_favourites(get_user_id())
+            render_favourites_table(favs)
+        else:
+            st.info("Log in to see your favourite products.")
 
     # ---- HISTORY TAB ----
     with tab_history:
