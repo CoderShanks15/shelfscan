@@ -289,10 +289,11 @@ def _verdict(score: float) -> str:
 
 
 def _verdict_emoji(score: float) -> str:
-    if score >= 70: return '✅'
-    if score >= 50: return '🟡'
-    if score >= 30: return '⚠️'
-    return '🚫'
+    """Return a small text indicator instead of emoji — CSS handles colour."""
+    if score >= 70: return ''
+    if score >= 50: return ''
+    if score >= 30: return ''
+    return ''
 
 
 def _breakdown(product: dict) -> dict:
@@ -306,11 +307,11 @@ def _breakdown(product: dict) -> dict:
     nova  = product.get('nova_group') or '?'
 
     return {
-        'sugar':     '🔴 High'   if sugar > 20 else '🟡 Medium' if sugar > 8  else '🟢 Low',
-        'sat_fat':   '🔴 High'   if sat > 5    else '🟡 Medium' if sat > 2    else '🟢 Low',
-        'salt':      '🔴 High'   if salt > 2   else '🟡 Medium' if salt > 1   else '🟢 Low',
-        'fiber':     '🟢 High'   if fiber >= 6 else '🟡 Medium' if fiber >= 3 else '🔴 Low',
-        'protein':   '🟢 High'   if prot >= 15 else '🟡 Medium' if prot >= 7  else '🔴 Low',
-        'additives': '🔴 Many'   if adds >= 8  else '🟡 Some'   if adds >= 3  else '🟢 Few',
+        'sugar':     'High'   if sugar > 20 else 'Medium' if sugar > 8  else 'Low',
+        'sat_fat':   'High'   if sat > 5    else 'Medium' if sat > 2    else 'Low',
+        'salt':      'High'   if salt > 2   else 'Medium' if salt > 1   else 'Low',
+        'fiber':     'High'   if fiber >= 6 else 'Medium' if fiber >= 3 else 'Low',
+        'protein':   'High'   if prot >= 15 else 'Medium' if prot >= 7  else 'Low',
+        'additives': 'Many'   if adds >= 8  else 'Some'   if adds >= 3  else 'Few',
         'nova':      nova,
     }

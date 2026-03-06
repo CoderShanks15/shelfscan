@@ -75,3 +75,16 @@ MODEL_PATH = os.environ.get(
 # ---------------------------------------------------------------------
 
 MAX_COMPARE_ITEMS = 4
+
+# ---------------------------------------------------------------------
+# OAUTH
+# ---------------------------------------------------------------------
+
+GOOGLE_CLIENT_ID     = os.environ.get("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+
+GITHUB_CLIENT_ID     = os.environ.get("GITHUB_CLIENT_ID", "")
+GITHUB_CLIENT_SECRET = os.environ.get("GITHUB_CLIENT_SECRET", "")
+
+# Base URL for OAuth redirects (default: local dev)
+APP_URL = os.environ.get("APP_URL", "http://localhost:8501")

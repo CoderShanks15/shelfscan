@@ -219,28 +219,52 @@ def save_scan(user_id: int, product: dict, score: float, verdict: str):
     """
     Save a scan to history.
     Skips silently if barcode is missing or invalid.
+    Deduplicates: if the same barcode was scanned today by the same user,
+    updates the existing row instead of creating a duplicate.
     """
     barcode = (product.get('barcode') or '').strip()
     if not _validate_barcode(barcode):
         return   # don't save scanless or invalid rows
 
     with _conn() as conn:
-        conn.execute("""
-            INSERT INTO scan_history
-              (user_id, barcode, name, brand, score, verdict,
-               nutriscore, nova_group, product_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            user_id,
-            barcode,
-            product.get('name', ''),
-            product.get('brand', ''),
-            _validate_score(score),
-            verdict,
-            product.get('nutriscore', ''),
-            product.get('nova_group'),
-            json.dumps(product),
-        ))
+        # Check if scanned today already (Bug 7 fix: dedup)
+        existing = conn.execute("""
+            SELECT id FROM scan_history
+            WHERE user_id = ? AND barcode = ?
+              AND date(scanned_at) = date('now', 'utc')
+            LIMIT 1
+        """, (user_id, barcode)).fetchone()
+
+        if existing:
+            # Update existing row with latest score/verdict
+            conn.execute("""
+                UPDATE scan_history
+                SET score = ?, verdict = ?, scanned_at = datetime('now','utc'),
+                    product_json = ?
+                WHERE id = ?
+            """, (
+                _validate_score(score),
+                verdict,
+                json.dumps(product),
+                existing['id'],
+            ))
+        else:
+            conn.execute("""
+                INSERT INTO scan_history
+                  (user_id, barcode, name, brand, score, verdict,
+                   nutriscore, nova_group, product_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                user_id,
+                barcode,
+                product.get('name', ''),
+                product.get('brand', ''),
+                _validate_score(score),
+                verdict,
+                product.get('nutriscore', ''),
+                product.get('nova_group'),
+                json.dumps(product),
+            ))
 
 
 def get_history(user_id: int, limit: int = 50, offset: int = 0) -> list[dict]:

@@ -10,9 +10,18 @@ def fetch_product(barcode: str) -> dict | None:
     """Fetch product data from Open Food Facts API.
     Returns a cleaned product dict, an error dict, or None if not found.
 
-    Note: Successful results are cached for 1 hour via Streamlit.
+    Successful results are cached in session state for the session lifetime.
     Errors are NOT cached so they can be retried immediately.
     """
+
+    # Check session-level cache first (Bug 2 fix)
+    cache = st.session_state.get("_product_cache")
+    if cache is None:
+        cache = {}
+        st.session_state["_product_cache"] = cache
+
+    if barcode in cache:
+        return cache[barcode]
 
     try:
         url = f"{BASE_URL}/api/v0/product/{barcode}.json"
@@ -27,7 +36,7 @@ def fetch_product(barcode: str) -> dict | None:
         cleaned = _clean_product(product)
 
         # Cache only successful results
-        _cache_product(barcode, cleaned)
+        cache[barcode] = cleaned
         return cleaned
 
     except requests.exceptions.Timeout:
@@ -36,12 +45,6 @@ def fetch_product(barcode: str) -> dict | None:
         return {"error": "No internet connection."}
     except Exception as e:
         return {"error": f"Unexpected error: {str(e)}"}
-
-
-@st.cache_data(ttl=3600)
-def _cache_product(barcode: str, product: dict) -> dict:
-    """Internal cache — stores only successful product lookups for 1hr."""
-    return product
 
 
 def _clean_product(raw: dict) -> dict:
