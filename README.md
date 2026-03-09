@@ -1,7 +1,7 @@
 <div align="center">
 
-# 🛒 ShelfScan
-### *Health Intelligence at the Speed of Sight*
+#  🛒 ShelfScan
+### *Health Intelligence at the Speed of Sight *
 
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.40-FF4B4B?style=flat-square&logo=streamlit&logoColor=white)](https://streamlit.io)
