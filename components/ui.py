@@ -519,6 +519,53 @@ def render_history_table(history: list):
 
 
 # -----------------------------------------------------------------------
+# USER STATS WIDGET (GAMIFICATION)
+# -----------------------------------------------------------------------
+
+def render_user_stats(stats: dict):
+    """Render a gamified stats dashboard for the user."""
+    total = stats.get("total_scans", 0)
+    avg = stats.get("avg_score", 0.0)
+    streak = stats.get("active_days", 0)
+    
+    # Simple logic to determine a rank
+    if total > 100:
+        rank = "Nutrition Expert 🏆"
+        color = "#fbbf24"
+    elif total > 20:
+        rank = "Health Enthusiast 🌟"
+        color = "#60a5fa"
+    elif total > 5:
+        rank = "Label Reader 🔍"
+        color = "#34d399"
+    else:
+        rank = "Novice Explorer 🥚"
+        color = "#94a3b8"
+
+    st.markdown(f"""
+    <div class="glass-card animate-in" style="margin-bottom: 20px;">
+        <div class="section-header" style="text-align: center; margin-bottom: 15px; color: {color};">
+            Rank: {rank}
+        </div>
+        <div class="stats-row" style="gap: 20px;">
+            <div class="stat-item" style="text-align: center;">
+                <div class="stat-number" style="font-size: 1.5rem;">{total}</div>
+                <div class="stat-label">Total Scans</div>
+            </div>
+            <div class="stat-item" style="text-align: center;">
+                <div class="stat-number" style="font-size: 1.5rem;">{avg:.1f}</div>
+                <div class="stat-label">Avg Health Score</div>
+            </div>
+            <div class="stat-item" style="text-align: center;">
+                <div class="stat-number" style="font-size: 1.5rem;">{streak} 🔥</div>
+                <div class="stat-label">Active Days</div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+# -----------------------------------------------------------------------
 # FAVOURITES TABLE
 # -----------------------------------------------------------------------
 

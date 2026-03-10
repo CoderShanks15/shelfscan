@@ -292,6 +292,25 @@ def get_history_count(user_id: int) -> int:
         return row[0] if row else 0   # safe — never raises TypeError
 
 
+def get_user_stats(user_id: int) -> dict:
+    """Return user gameplay/health stats: total scans, avg score, and scan streak."""
+    with _conn() as conn:
+        row = conn.execute("""
+            SELECT 
+                COUNT(*) as total_scans,
+                AVG(score) as avg_score,
+                COUNT(DISTINCT date(scanned_at)) as active_days
+            FROM scan_history 
+            WHERE user_id = ?
+        """, (user_id,)).fetchone()
+        
+        return {
+            "total_scans": row['total_scans'] if row and row['total_scans'] else 0,
+            "avg_score": round(row['avg_score'], 1) if row and row['avg_score'] else 0.0,
+            "active_days": row['active_days'] if row and row['active_days'] else 0
+        }
+
+
 def clear_history(user_id: int):
     """Delete all scan history for a user."""
     with _conn() as conn:

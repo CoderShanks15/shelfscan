@@ -40,6 +40,7 @@ from components.ui import (
     render_favourites_table,
     render_auth_sidebar,
     render_skeleton,
+    render_user_stats,
 )
 from session.session import (
     init_session,
@@ -68,6 +69,7 @@ from auth.oauth import (
 from database.db import (
     save_scan, get_history, save_favourite, remove_favourite,
     is_favourite, get_favourites, create_user, get_user_by_email,
+    get_user_stats
 )
 
 
@@ -486,6 +488,11 @@ def main():
         if product and health:
             st.markdown("---")
             render_product_card(product, health, price, image_result)
+            
+            # Gamification: Show balloons for very healthy products!
+            if health.get("score", 0) >= 80 and st.session_state.get("_scan_attempted", False) and not st.session_state.get("_balloons_shown", False):
+                st.balloons()
+                st.session_state["_balloons_shown"] = True
 
             # Action buttons
             col_a, col_b, col_c = st.columns(3)
@@ -522,6 +529,7 @@ def main():
                     # BUG 8 FIX: increment upload key to reset file_uploader
                     st.session_state["_upload_key"] = upload_key + 1
                     st.session_state["_scan_attempted"] = False
+                    st.session_state["_balloons_shown"] = False
                     st.rerun()
 
     # ---- COMPARE TAB ----
@@ -551,10 +559,16 @@ def main():
     # ---- HISTORY TAB ----
     with tab_history:
         if is_logged_in():
-            history = get_history(get_user_id())
+            user_id = get_user_id()
+            
+            # Dashboard Stats
+            stats = get_user_stats(user_id)
+            render_user_stats(stats)
+            
+            history = get_history(user_id)
             render_history_table(history)
         else:
-            st.info("Log in to see your scan history.")
+            st.info("Log in to see your scan history and health stats.")
 
 
 # -----------------------------------------------------------------------
