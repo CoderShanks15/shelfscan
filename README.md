@@ -52,6 +52,20 @@ The application features a bespoke, "Linear-style" **Dark Mode Design System**:
 
 ---
 
+## 🤖 Models Used & Availability
+
+ShelfScan relies on three AI/ML models, all of which are **open-source and free to use indefinitely** — there are no API keys, subscriptions, or usage quotas required.
+
+| # | Model | Purpose | License | Usage Limit |
+|---|-------|---------|---------|-------------|
+| 1 | **LightGBM Regressor** | Calculates the health score (0–100) from 150 nutritional features | [MIT](https://github.com/microsoft/LightGBM/blob/master/LICENSE) | **Unlimited** — trained and runs entirely on your local machine |
+| 2 | **CLIP ViT-Base-Patch32** (`openai/clip-vit-base-patch32`) | Zero-shot image classification of product packaging categories | [MIT](https://github.com/openai/CLIP/blob/main/LICENSE) | **Unlimited** — downloaded once (~340 MB) from HuggingFace and runs locally thereafter |
+| 3 | **OpenCV** | Image quality analysis, barcode region detection, and colour extraction | [Apache 2.0](https://github.com/opencv/opencv/blob/master/LICENSE) | **Unlimited** — open-source library bundled with the project |
+
+> **Summary:** All three models are open-source with permissive licenses. None of them have time limits, rate limits, or require a paid plan. You can use them for as long as you like.
+
+---
+
 ## 🎯 See It in Action
 
 Try these barcodes in the **Scan** tab right now (no camera required):
