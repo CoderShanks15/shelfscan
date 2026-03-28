@@ -74,6 +74,11 @@ def _clean_product(raw: dict) -> dict:
         "fiber":          nutriments.get("fiber_100g", 0),
         "proteins":       nutriments.get("proteins_100g", 0),
         "salt":           nutriments.get("salt_100g", 0),
+        "trans_fat":      nutriments.get("trans-fat_100g", 0),
+        "mono_fat":       nutriments.get("monounsaturated-fat_100g", 0),
+        "poly_fat":       nutriments.get("polyunsaturated-fat_100g", 0),
+        "omega3":         nutriments.get("omega-3-fat_100g", 0),
+        "omega6":         nutriments.get("omega-6-fat_100g", 0),
 
         # Extra info
         "allergens":      raw.get("allergens_tags", []),

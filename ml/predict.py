@@ -258,13 +258,48 @@ def _apply_adjustments(score: float, product: dict) -> tuple:
     if salt > 2:
         adjust(-3, f"High salt ({salt:.1f}g/100g)")
 
+    # ── Fat penalties (NEW) ──
+    fat = product.get('fat', 0) or 0
+    if fat > 40:
+        adjust(-8, f"Very high fat ({fat:.1f}g/100g)")
+    elif fat > 20:
+        adjust(-5, f"High fat ({fat:.1f}g/100g)")
+
+    sat = product.get('saturated_fat', 0) or 0
+    if sat > 10:
+        adjust(-6, f"Very high saturated fat ({sat:.1f}g/100g)")
+    elif sat > 5:
+        adjust(-4, f"High saturated fat ({sat:.1f}g/100g)")
+
+    # ── Energy density penalty (NEW) ──
+    kcal = product.get('energy_kcal', 0) or 0
+    if kcal > 500:
+        adjust(-5, f"Very high calories ({kcal:.0f} kcal/100g)")
+    elif kcal > 400:
+        adjust(-3, f"High calories ({kcal:.0f} kcal/100g)")
+
+    # ── Fat-in-top-3-ingredients penalty (NEW) ──
+    ingr = (product.get('ingredients', '') or '').lower()
+    top3_ingr = ' '.join(ingr.split(',')[:3])
+    fat_keywords = ['oil', 'fat', 'butter', 'cream', 'lard', 'margarine']
+    if any(kw in top3_ingr for kw in fat_keywords):
+        adjust(-3, "Fat/oil is a top-3 ingredient")
+
+    # ── Unknown Nutri-Score penalty (NEW) ──
+    if not ns or ns == 'UNKNOWN':
+        adjust(-2, "Nutri-Score unknown (missing data)")
+
+    # ── Low nutrient density penalty (NEW) ──
     fiber = product.get('fiber', 0) or 0
+    prot = product.get('proteins', 0) or 0
+    if prot < 2 and fiber < 1 and kcal > 100:
+        adjust(-3, "Low protein & fiber — empty calories")
+
     if fiber >= 6:
         adjust(+4, f"High fiber ({fiber:.1f}g/100g)")
     elif fiber >= 3:
         adjust(+2, f"Good fiber ({fiber:.1f}g/100g)")
 
-    prot = product.get('proteins', 0) or 0
     if prot >= 15:
         adjust(+3, f"High protein ({prot:.1f}g/100g)")
 
@@ -299,17 +334,21 @@ def _verdict_emoji(score: float) -> str:
 def _breakdown(product: dict) -> dict:
     """Per-nutrient traffic light labels for UI display."""
     sugar = product.get('sugars', 0) or 0
+    fat   = product.get('fat', 0) or 0
     sat   = product.get('saturated_fat', 0) or 0
     salt  = product.get('salt', 0) or 0
     fiber = product.get('fiber', 0) or 0
     prot  = product.get('proteins', 0) or 0
+    kcal  = product.get('energy_kcal', 0) or 0
     adds  = len(product.get('additives', []))
     nova  = product.get('nova_group') or '?'
 
     return {
         'sugar':     'High'   if sugar > 20 else 'Medium' if sugar > 8  else 'Low',
+        'fat':       'High'   if fat > 20   else 'Medium' if fat > 10   else 'Low',
         'sat_fat':   'High'   if sat > 5    else 'Medium' if sat > 2    else 'Low',
         'salt':      'High'   if salt > 2   else 'Medium' if salt > 1   else 'Low',
+        'energy':    'High'   if kcal > 400 else 'Medium' if kcal > 200 else 'Low',
         'fiber':     'High'   if fiber >= 6 else 'Medium' if fiber >= 3 else 'Low',
         'protein':   'High'   if prot >= 15 else 'Medium' if prot >= 7  else 'Low',
         'additives': 'Many'   if adds >= 8  else 'Some'   if adds >= 3  else 'Few',

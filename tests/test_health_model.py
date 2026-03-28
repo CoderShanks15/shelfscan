@@ -150,6 +150,27 @@ OATS = {
     "ingredients":   "100% wholegrain oats",
 }
 
+MAYONNAISE = {
+    "barcode":       "8909106029842",
+    "name":          "Smoky Tandoori Mayonnaise",
+    "brand":         "HUL",
+    "quantity":      "250g",
+    "nutriscore":    "",
+    "nova_group":    4,
+    "energy_kcal":   680,
+    "fat":           70.0,
+    "saturated_fat": 10.0,
+    "carbohydrates": 2.0,
+    "sugars":        1.5,
+    "fiber":         0,
+    "proteins":      1.0,
+    "salt":          1.5,
+    "allergens":     ["en:eggs"],
+    "additives":     ["en:e385", "en:e211", "en:e202", "en:e330"],
+    "labels":        [],
+    "ingredients":   "Soybean oil, water, egg yolk, sugar, salt, spices",
+}
+
 EMPTY_PRODUCT = {
     "barcode":       "0000000000000",
     "name":          "Unknown Product",
@@ -283,6 +304,33 @@ class TestAdjustments:
         adj_text = " ".join(result['adjustments'])
         assert "wholegrain" in adj_text.lower() or "whole" in adj_text.lower()
 
+    # ---- Mayonnaise penalty tests (NEW) ----
+
+    def test_mayonnaise_gets_high_fat_penalty(self):
+        """Mayonnaise has 70g fat — should trigger very high fat adjustment."""
+        result = predict_health(MAYONNAISE)
+        adj_text = " ".join(result['adjustments'])
+        assert "fat" in adj_text.lower()
+
+    def test_mayonnaise_gets_sat_fat_penalty(self):
+        """Mayonnaise has 10g saturated fat — should trigger sat fat penalty."""
+        result = predict_health(MAYONNAISE)
+        adj_text = " ".join(result['adjustments'])
+        assert "saturated" in adj_text.lower()
+
+    def test_mayonnaise_gets_energy_penalty(self):
+        """Mayonnaise has 680 kcal — should trigger energy density penalty."""
+        result = predict_health(MAYONNAISE)
+        adj_text = " ".join(result['adjustments'])
+        assert "calorie" in adj_text.lower() or "energy" in adj_text.lower()
+
+    def test_mayonnaise_score_below_50(self):
+        """After all adjustments, mayonnaise must score ≤ 50."""
+        result = predict_health(MAYONNAISE)
+        assert result['score'] <= 50, (
+            f"Mayonnaise scored {result['score']} — should be ≤ 50"
+        )
+
 
 # -----------------------------------------------------------------------
 # TEST: breakdown format
@@ -293,7 +341,7 @@ class TestBreakdown:
     def test_breakdown_has_expected_keys(self):
         result = predict_health(NUTELLA)
         bd = result['breakdown']
-        for key in ['sugar', 'sat_fat', 'salt', 'fiber', 'protein', 'additives', 'nova']:
+        for key in ['sugar', 'fat', 'sat_fat', 'salt', 'energy', 'fiber', 'protein', 'additives', 'nova']:
             assert key in bd, f"Missing breakdown key: {key}"
 
     def test_breakdown_values_contain_emoji(self):
